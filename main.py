@@ -10,31 +10,26 @@ def load_data():
 
 df = load_data()
 
-st.title("🎧 Mood-Based Spotify Song Recommender")
+st.title("🎧 Spotify Song Recommender")
 
-# Mood options
-mood = st.selectbox("Pick your mood:", ["Happy", "Sad", "Energetic", "Calm"])
+# Mood filter based on columns that exist in your CSV
+mood = st.selectbox("Pick your mood:", ["Popular", "Long Songs", "Short Songs", "Random"])
 
-# Mood logic — uses valence & energy to filter
-if "valence" in df.columns and "energy" in df.columns:
-    if mood == "Happy":
-        filtered = df[df["valence"] > 0.7]
-    elif mood == "Sad":
-        filtered = df[df["valence"] < 0.3]
-    elif mood == "Energetic":
-        filtered = df[df["energy"] > 0.7]
-    else:  # Calm
-        filtered = df[(df["energy"] < 0.4) & (df["valence"] > 0.5)]
-
-    # Show 5 recommendations
-    st.markdown("### ✨ Your recommended songs:")
-    if not filtered.empty:
-        for i, row in filtered.sample(min(5, len(filtered))).iterrows():
-            st.write(f"🎵 {row['track_name']} by {row['artist_name']}")
-    else:
-        st.warning("😕 No songs match this mood in your dataset.")
+if mood == "Popular":
+    filtered = df[df["popularity"] > 85]
+elif mood == "Long Songs":
+    filtered = df[df["duration_min"] > 4]
+elif mood == "Short Songs":
+    filtered = df[df["duration_min"] < 3]
 else:
-    st.error("🚨 'valence' and/or 'energy' column not found in your dataset.")
+    filtered = df.sample(5)
+
+st.markdown("### ✨ Your recommended songs:")
+if not filtered.empty:
+    for i, row in filtered.iterrows():
+        st.write(f"🎵 {row['track_name']} by {row['artist']}")
+else:
+    st.warning("😕 No songs match this mood in your dataset.")
 
 # 🎁 Mystery Box
 st.markdown("---")
@@ -42,4 +37,4 @@ st.header("🎁 Mystery Box — Get a surprise song!")
 
 if st.button("Open Mystery Box"):
     mystery = df.sample(1).iloc[0]
-    st.success(f"🎶 {mystery['track_name']} by {mystery['artist_name']}")
+    st.success(f"🎶 {mystery['track_name']} by {mystery['artist']}")
