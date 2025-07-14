@@ -2,13 +2,17 @@ import streamlit as st
 import pandas as pd
 import time
 
-# --- Custom CSS ---
+# --- Custom CSS for bright yellow Moodify UI ---
 st.markdown(
     """
     <style>
-    .main { background-color: #fff94f; color: #333; }
-    .floating-emojis { position: relative; height: 60px; margin-bottom: 20px; }
-    .emoji { font-size: 2rem; position: absolute; animation: floatUp 4s ease-in-out infinite; user-select: none; }
+    .main { background-color: #fff94f; color: #333333; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .floating-emojis {
+        position: relative; width: 100%; height: 60px; margin-bottom: 20px;
+    }
+    .emoji {
+        font-size: 2rem; position: absolute; animation: floatUp 4s ease-in-out infinite; user-select: none;
+    }
     .emoji1 { left: 10%; animation-delay: 0s; }
     .emoji2 { left: 25%; animation-delay: 1s; }
     .emoji3 { left: 40%; animation-delay: 2s; }
@@ -22,89 +26,73 @@ st.markdown(
     }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-# --- Load Data safely (no genre required) ---
+# --- Load CSV ---
 @st.cache_data
 def load_data():
-    try:
-        df = pd.read_csv("spotify.csv")
-        df.columns = df.columns.str.strip().str.lower()
-        required_cols = {'track_name', 'artist'}  # ✅ no genre!
-        missing = required_cols - set(df.columns)
-        if missing:
-            st.error(f"Dataset missing columns: {', '.join(missing)}")
-            return pd.DataFrame()
-        return df
-    except Exception as e:
-        st.error("Error loading dataset.")
-        st.write(e)
-        return pd.DataFrame()
+    df = pd.read_csv("spotify.csv")
+    df.columns = df.columns.str.strip().str.lower()
+    return df
 
 df = load_data()
 
-if df.empty:
-    st.stop()
-
+# --- App Title ---
 st.title("🎧 Moodify — Your AI Music Companion")
 
-# --- Emojis ---
-st.markdown("""
-<div class="floating-emojis">
-    <span class="emoji emoji1">😊</span>
-    <span class="emoji emoji2">😢</span>
-    <span class="emoji emoji3">😎</span>
-    <span class="emoji emoji4">⚡</span>
-    <span class="emoji emoji5">💕</span>
-    <span class="emoji emoji6">🕵‍♂</span>
-</div>
-""", unsafe_allow_html=True)
+# --- Floating Emojis ---
+st.markdown(
+    """
+    <div class="floating-emojis">
+        <span class="emoji emoji1">😊</span>
+        <span class="emoji emoji2">😢</span>
+        <span class="emoji emoji3">😎</span>
+        <span class="emoji emoji4">⚡</span>
+        <span class="emoji emoji5">💕</span>
+        <span class="emoji emoji6">🕵‍♂</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# --- Moods ---
-mood_options = {
-    "Happy 😊": ["happy", "joy", "bright"],
-    "Sad 😢": ["sad", "blue", "melancholy"],
-    "Chill 😎": ["chill", "relax", "calm"],
-    "Energetic ⚡": ["energetic", "upbeat", "fast"],
-    "Romantic 💕": ["romantic", "love", "soft"],
-    "Mysterious 🕵‍♂": ["mysterious", "dark", "moody"],
+# --- Mood keywords (AI-like filtering) ---
+mood_keywords = {
+    "Happy 😊": ["happy", "joy", "bright", "smile"],
+    "Sad 😢": ["sad", "blue", "cry", "lonely"],
+    "Chill 😎": ["chill", "relax", "slow", "lofi"],
+    "Energetic ⚡": ["energy", "dance", "party", "power"],
+    "Romantic 💕": ["love", "heart", "kiss", "romance"],
+    "Mysterious 🕵‍♂": ["dark", "mystery", "shadow", "secret"],
 }
 
-# --- Sidebar mood picker only ---
-st.sidebar.header("🎶 Customize Your Vibe")
-selected_mood = st.sidebar.selectbox("Select Mood", list(mood_options.keys()))
+mood = st.selectbox("Pick your mood:", list(mood_keywords.keys()) + ["Popular", "Long Songs", "Short Songs", "Random"])
 
-# --- Filter helper ---
-def filter_by_mood(df, keywords):
-    if "track_name" not in df.columns:
-        return pd.DataFrame()
-    return df[df["track_name"].str.contains('|'.join(keywords), case=False, na=False)]
-
-# --- Filter songs ---
-try:
-    filtered = filter_by_mood(df, mood_options[selected_mood])
-except Exception as e:
-    st.error("Error filtering songs.")
-    st.write(e)
-    filtered = pd.DataFrame()
-
-# --- Display results ---
-st.markdown(f"### 🎶 Songs for {selected_mood}")
-if filtered.empty:
-    st.warning("No songs found! Here's a surprise instead:")
-    try:
-        surprise = df.sample(1).iloc[0]
-        st.write(f"🎵 {surprise['track_name']} by {surprise['artist']}")
-    except:
-        st.error("No songs available to show.")
+# --- Filter logic ---
+if mood in mood_keywords:
+    keywords = mood_keywords[mood]
+    filtered = df[df["track_name"].str.contains('|'.join(keywords), case=False, na=False)]
+elif mood == "Popular":
+    filtered = df[df["popularity"] > 85]
+elif mood == "Long Songs":
+    filtered = df[df["duration_min"] > 4]
+elif mood == "Short Songs":
+    filtered = df[df["duration_min"] < 3]
 else:
-    for _, row in filtered.sample(min(5, len(filtered))).iterrows():
+    filtered = df.sample(5)
+
+# --- Show recommended songs ---
+st.markdown("### ✨ Your recommended songs:")
+if not filtered.empty:
+    sample = filtered.sample(min(5, len(filtered)))
+    for _, row in sample.iterrows():
         st.write(f"🎵 {row['track_name']} by {row['artist']}")
+else:
+    st.warning("😕 No songs match this mood in your dataset.")
 
 # --- Mystery Box ---
 st.markdown("---")
-st.header("🎁 Mystery Box — Get a surprise song!")
+st.header("🎁 Mystery Box — Open to get a surprise song!")
 
 if 'mystery_opened' not in st.session_state:
     st.session_state.mystery_opened = False
@@ -112,22 +100,21 @@ if 'mystery_opened' not in st.session_state:
 if st.button("Open Mystery Box"):
     if not st.session_state.mystery_opened:
         st.session_state.mystery_opened = True
-        with st.spinner("Opening the box..."):
-            time.sleep(2)
+        with st.spinner("Opening your mystery box... 🎲"):
+            time.sleep(3)
         mystery = df.sample(1).iloc[0]
         st.balloons()
         st.success(f"✨ You got: 🎶 {mystery['track_name']} by {mystery['artist']} ✨")
     else:
-        st.info("Already opened! Refresh to try again.")
+        st.info("You've already opened it! Refresh the page to try again.")
 
 if st.button("🔄 Reset Mystery Box"):
     st.session_state.mystery_opened = False
-    st.info("Box reset! You can open it again.")
-        
-   
-
-       
-   
+    st.info("Mystery Box reset!")
+    
+    
+ 
+      
    
 
 
