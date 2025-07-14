@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import random
 import time
 
 # --- Custom CSS for bright yellow background and floating emojis ---
@@ -71,14 +70,28 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- Load Data ---
+# --- Load Data safely ---
 @st.cache_data
 def load_data():
-    df = pd.read_csv("spotify.csv")
-    df.columns = df.columns.str.strip().str.lower()
-    return df
+    try:
+        df = pd.read_csv("spotify.csv")
+        df.columns = df.columns.str.strip().str.lower()
+        # Check required columns exist
+        required_cols = {'track_name', 'artist', 'genre'}
+        missing_cols = required_cols - set(df.columns)
+        if missing_cols:
+            st.error(f"Dataset missing columns: {', '.join(missing_cols)}")
+            return pd.DataFrame()  # Return empty df to prevent errors
+        return df
+    except Exception as e:
+        st.error("Error loading data. Please check 'spotify.csv'.")
+        st.write(e)
+        return pd.DataFrame()
 
 df = load_data()
+
+if df.empty:
+    st.stop()  # Stop further app execution if dataset invalid
 
 # --- Title ---
 st.title("🎧 Moodify — Your AI Music Companion")
@@ -98,7 +111,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- Mood Selector with emojis below ---
+# --- Mood Options with keywords ---
 mood_options = {
     "Happy 😊": ["happy", "joy", "bright"],
     "Sad 😢": ["sad", "blue", "melancholy"],
@@ -108,33 +121,96 @@ mood_options = {
     "Mysterious 🕵‍♂": ["mysterious", "dark", "moody"],
 }
 
-selected_mood = st.selectbox("Select your mood to find songs:", list(mood_options.keys()))
+# --- Genre Options with keywords (check if genre column exists) ---
+if 'genre' in df.columns:
+    genres = sorted(df['genre'].dropna().unique())
+else:
+    genres = []
 
-def filter_by_mood(df, keywords):
-    mask = df['track_name'].str.contains('|'.join(keywords), case=False, na=False)
-    return df[mask]
+# --- Sidebar selectors ---
+st.sidebar.header("🎶 Customize Your Vibe")
 
-filtered_songs = filter_by_mood(df, mood_options[selected_mood])
+selected_genre = None
+if genres:
+    selected_genre = st.sidebar.selectbox("Select Genre (optional)", ["All"] + genres)
+else:
+    st.sidebar.warning("No genre data available.")
 
-st.markdown(f"### 🎶 Songs for {selected_mood}")
+selected_mood = st.sidebar.selectbox("Select Mood", list(mood_options.keys()))
+
+# --- Filtering helper functions ---
+def filter_by_genre(dataframe, genre):
+    if genre == "All" or genre is None:
+        return dataframe
+    # Case insensitive match
+    mask = dataframe['genre'].str.lower() == genre.lower()
+    return dataframe[mask]
+
+def filter_by_mood(dataframe, keywords):
+    if 'track_name' not in dataframe.columns:
+        return pd.DataFrame()
+    mask = dataframe['track_name'].str.contains('|'.join(keywords), case=False, na=False)
+    return dataframe[mask]
+
+# --- Filter songs ---
+try:
+    filtered_genre = filter_by_genre(df, selected_genre)
+    filtered_songs = filter_by_mood(filtered_genre, mood_options[selected_mood])
+except Exception as e:
+    st.error("Error filtering songs.")
+    st.write(e)
+    filtered_songs = pd.DataFrame()
+
+# --- Display songs ---
+st.markdown(f"### 🎶 Songs for {selected_mood} {'and ' + selected_genre if selected_genre and selected_genre != 'All' else ''}")
 
 if filtered_songs.empty:
-    st.warning("No songs found for this mood! Here's a surprise:")
-    surprise = df.sample(1).iloc[0]
-    st.write(f"🎵 {surprise['track_name']} by {surprise['artist']}")
+    st.warning("No songs found for your vibe! Here's a surprise:")
+    try:
+        surprise = df.sample(1).iloc[0]
+        st.write(f"🎵 {surprise['track_name']} by {surprise['artist']}")
+    except Exception as e:
+        st.error("No songs available to show.")
+        st.write(e)
 else:
     sample_songs = filtered_songs.sample(min(5, len(filtered_songs)))
     for _, row in sample_songs.iterrows():
-        st.write(f"🎵 {row['track_name']} by {row['artist']}")
+        track = row.get('track_name', 'Unknown Track')
+        artist = row.get('artist', 'Unknown Artist')
+        st.write(f"🎵 {track} by {artist}")
 
 st.markdown("---")
 
-# --- Mystery Box with “Subway Surfers item drop” feel ---
+# --- Mystery Box with session state to avoid multiple clicks ---
 st.header("🎁 Mystery Box — Open to get a surprise song!")
 
+if 'mystery_opened' not in st.session_state:
+    st.session_state.mystery_opened = False
+
 if st.button("Open Mystery Box", key="mystery"):
-    with st.spinner('Opening Mystery Box... 🎲🎵'):
-        time.sleep(3)  # simulate suspense
-    mystery_song = df.sample(1).iloc[0]
-    st.balloons()
-    st.success(f"✨ You got: 🎶 {mystery_song['track_name']} by {mystery_song['artist']} ✨")
+    if not st.session_state.mystery_opened:
+        st.session_state.mystery_opened = True
+        with st.spinner('Opening Mystery Box... 🎲🎵'):
+            time.sleep(3)  # suspense effect
+        try:
+            mystery_song = df.sample(1).iloc[0]
+            st.balloons()
+            track = mystery_song.get('track_name', 'Unknown Track')
+            artist = mystery_song.get('artist', 'Unknown Artist')
+            st.success(f"✨ You got: 🎶 {track} by {artist} ✨")
+        except Exception as e:
+            st.error("Failed to get a mystery song.")
+            st.write(e)
+    else:
+        st.info("You already opened the Mystery Box! Refresh the page to open again.")
+
+# --- Reset Mystery Box Button ---
+if st.button("Reset Mystery Box"):
+    st.session_state.mystery_opened = False
+    st.info("Mystery Box is reset. You can open it again!")
+
+# You can continue adding your other features here safely following these patterns...
+       
+       
+
+
