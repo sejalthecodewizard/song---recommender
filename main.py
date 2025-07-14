@@ -76,8 +76,8 @@ def load_data():
     try:
         df = pd.read_csv("spotify.csv")
         df.columns = df.columns.str.strip().str.lower()
-        # Check required columns exist
-        required_cols = {'track_name', 'artist', 'genre'}
+        # Check required columns exist, except genre is optional now
+        required_cols = {'track_name', 'artist'}
         missing_cols = required_cols - set(df.columns)
         if missing_cols:
             st.error(f"Dataset missing columns: {', '.join(missing_cols)}")
@@ -121,31 +121,15 @@ mood_options = {
     "Mysterious 🕵‍♂": ["mysterious", "dark", "moody"],
 }
 
-# --- Genre Options with keywords (check if genre column exists) ---
-if 'genre' in df.columns:
-    genres = sorted(df['genre'].dropna().unique())
-else:
-    genres = []
+# --- Genre Options removed since dataset has no genre ---
+# So no genre selection UI or filtering
 
 # --- Sidebar selectors ---
 st.sidebar.header("🎶 Customize Your Vibe")
 
-selected_genre = None
-if genres:
-    selected_genre = st.sidebar.selectbox("Select Genre (optional)", ["All"] + genres)
-else:
-    st.sidebar.warning("No genre data available.")
-
 selected_mood = st.sidebar.selectbox("Select Mood", list(mood_options.keys()))
 
-# --- Filtering helper functions ---
-def filter_by_genre(dataframe, genre):
-    if genre == "All" or genre is None:
-        return dataframe
-    # Case insensitive match
-    mask = dataframe['genre'].str.lower() == genre.lower()
-    return dataframe[mask]
-
+# --- Filtering helper function ---
 def filter_by_mood(dataframe, keywords):
     if 'track_name' not in dataframe.columns:
         return pd.DataFrame()
@@ -154,15 +138,14 @@ def filter_by_mood(dataframe, keywords):
 
 # --- Filter songs ---
 try:
-    filtered_genre = filter_by_genre(df, selected_genre)
-    filtered_songs = filter_by_mood(filtered_genre, mood_options[selected_mood])
+    filtered_songs = filter_by_mood(df, mood_options[selected_mood])
 except Exception as e:
     st.error("Error filtering songs.")
     st.write(e)
     filtered_songs = pd.DataFrame()
 
 # --- Display songs ---
-st.markdown(f"### 🎶 Songs for {selected_mood} {'and ' + selected_genre if selected_genre and selected_genre != 'All' else ''}")
+st.markdown(f"### 🎶 Songs for {selected_mood}")
 
 if filtered_songs.empty:
     st.warning("No songs found for your vibe! Here's a surprise:")
@@ -210,7 +193,16 @@ if st.button("Reset Mystery Box"):
     st.info("Mystery Box is reset. You can open it again!")
 
 # You can continue adding your other features here safely following these patterns...
+    
        
+
+
+   
+   
+  
+
+   
        
+    
 
 
